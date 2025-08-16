@@ -23,8 +23,13 @@ class Transaction(models.Model):
     )
     tx_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # ✅ Unique transaction reference
     reference = models.CharField(max_length=100, unique=True, editable=False)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # ✅ Indexed for faster lookups in admin/API
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+
     metadata = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
