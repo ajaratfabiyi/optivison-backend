@@ -2,7 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from .models import KYCSubmission
 from .serializers import KYCSubmissionSerializer, AdminKYCActionSerializer
-
+from typing import Any
 
 # ---------------------------
 # User submits KYC
@@ -25,9 +25,9 @@ class KYCStatusView(generics.RetrieveAPIView):
     serializer_class = KYCSubmissionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self):
-        return KYCSubmission.objects.get(user=self.request.user)
 
+    def get_object(self) -> KYCSubmission:  # type: ignore[override]
+        return KYCSubmission.objects.get(user=self.request.user)
 
 # ---------------------------
 # Admin updates KYC (approve/reject)
