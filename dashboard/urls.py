@@ -1,9 +1,11 @@
+# dashboard/urls.py
 from django.urls import path
 from .views import (
     UserStatsView,
     DownlineStatsView,
     EarningsStatsView,
-    ReferralTreeView
+    ReferralTreeView,
+    DashboardOverviewView
 )
 
 urlpatterns = [
@@ -11,4 +13,5 @@ urlpatterns = [
     path('downline/', DownlineStatsView.as_view(), name='downline-stats'),
     path('earnings/', EarningsStatsView.as_view(), name='earnings-stats'),
     path('referrals/tree/', ReferralTreeView.as_view(), name='referral-tree'),
+    path('overview/', DashboardOverviewView.as_view(), name='dashboard-overview'),
 ]
