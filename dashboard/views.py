@@ -1,3 +1,4 @@
+# dashboard/views.py
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -89,3 +90,51 @@ class ReferralTreeView(APIView):
             'id', 'username', 'email', 'date_joined'
         )
         return Response({"referral_tree": list(referrals)})
+
+
+class DashboardOverviewView(APIView):
+    """
+    Returns a consolidated dashboard overview for the authenticated user.
+    Includes:
+    - Balance
+    - Total earnings
+    - Total withdrawn
+    - Total referrals
+    - Active referrals
+    - Referral tree (first level)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        total_earnings = Transaction.objects.filter(
+            user=user,
+            tx_type__in=['deposit', 'bonus'],
+            status='completed'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        total_withdrawn = WithdrawalRequest.objects.filter(
+            user=user,
+            status='paid'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        balance = total_earnings - total_withdrawn
+
+        total_referrals = User.objects.filter(referred_by=user).count()
+        active_referrals = User.objects.filter(
+            referred_by=user, is_active=True
+        ).count()
+
+        referrals_list = list(User.objects.filter(referred_by=user).values(
+            'id', 'username', 'email', 'date_joined'
+        ))
+
+        return Response({
+            "balance": balance,
+            "total_earnings": total_earnings,
+            "total_withdrawn": total_withdrawn,
+            "total_referrals": total_referrals,
+            "active_referrals": active_referrals,
+            "referral_tree": referrals_list
+        })
