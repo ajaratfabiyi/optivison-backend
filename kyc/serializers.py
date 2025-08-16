@@ -4,22 +4,18 @@ from .models import KYCSubmission
 class KYCSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = KYCSubmission
-        fields = ['document_type', 'document_file']
+        fields = '__all__'
+        read_only_fields = [
+            'id', 'user', 'status', 'submitted_at', 'updated_at', 'rejection_reason'
+        ]
 
-    def create(self, validated_data):
-        user = self.context['request'].user
-        # Overwrite or create a new submission
-        kyc, created = KYCSubmission.objects.update_or_create(
-            user=user,
-            defaults={
-                'document_type': validated_data['document_type'],
-                'document_file': validated_data['document_file'],
-                'status': 'pending'
-            }
-        )
-        return kyc
 
-class KYCStatusSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = KYCSubmission
-        fields = ['status', 'submitted_at', 'reviewed_at']
+class AdminKYCActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=['approve', 'reject'])
+    reason = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs['document_type'] in ['passport', 'driver_license'] and not attrs.get('document_back'):
+            raise serializers.ValidationError("Back of document is required for this type.")
+        return attrs
+
