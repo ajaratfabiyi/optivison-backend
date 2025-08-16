@@ -1,3 +1,4 @@
+# admin_panel/views.py
 from rest_framework import generics, status
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
@@ -5,7 +6,12 @@ from django.utils import timezone
 from users.models import User
 from kyc.models import KYCSubmission
 from transactions.models import Transaction
-from .serializers import UserAdminSerializer, KYCAdminSerializer, TransactionAdminSerializer
+from withdrawals.models import WithdrawalRequest
+from .serializers import (
+    UserAdminSerializer,
+    KYCAdminSerializer,
+    TransactionAdminSerializer
+)
 
 
 # -------- USER MANAGEMENT --------
@@ -15,16 +21,20 @@ class AdminUserListView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
 
 
-class AdminUserToggleActiveView(generics.UpdateAPIView):
+class AdminUserUpdateView(generics.UpdateAPIView):
+    """
+    Allows admin to update multiple user fields (balance, status, withdrawal status).
+    """
     queryset = User.objects.all()
     serializer_class = UserAdminSerializer
     permission_classes = [IsAdminUser]
 
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
-        user.is_active = not user.is_active
-        user.save()
-        return Response({'status': 'updated', 'is_active': user.is_active})
+        serializer = self.get_serializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'status': 'updated', 'user': serializer.data})
 
 
 # -------- KYC MANAGEMENT --------
@@ -44,11 +54,8 @@ class AdminKYCApproveView(generics.UpdateAPIView):
         kyc.status = 'approved'
         kyc.reviewed_at = timezone.now()
         kyc.save()
-
-        # Also mark user as verified
         kyc.user.is_kyc_verified = True
         kyc.user.save()
-
         return Response({'status': 'approved', 'user_verified': True})
 
 
@@ -58,16 +65,46 @@ class AdminKYCRejectView(generics.UpdateAPIView):
     permission_classes = [IsAdminUser]
 
     def patch(self, request, *args, **kwargs):
+        reason = request.data.get('reason', '')
         kyc = self.get_object()
         kyc.status = 'rejected'
+        kyc.rejection_reason = reason
         kyc.reviewed_at = timezone.now()
         kyc.save()
-
-        # Keep user unverified
         kyc.user.is_kyc_verified = False
         kyc.user.save()
+        return Response({'status': 'rejected', 'reason': reason})
 
-        return Response({'status': 'rejected', 'user_verified': False})
+
+# -------- WITHDRAWAL MANAGEMENT --------
+class AdminWithdrawalListView(generics.ListAPIView):
+    queryset = WithdrawalRequest.objects.all().order_by('-requested_at')
+    serializer_class = TransactionAdminSerializer  # or create a specific WithdrawalAdminSerializer
+    permission_classes = [IsAdminUser]
+
+
+class AdminWithdrawalApproveView(generics.UpdateAPIView):
+    queryset = WithdrawalRequest.objects.all()
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, *args, **kwargs):
+        withdrawal = self.get_object()
+        withdrawal.status = 'approved'
+        withdrawal.save()
+        return Response({'status': 'approved'})
+
+
+class AdminWithdrawalRejectView(generics.UpdateAPIView):
+    queryset = WithdrawalRequest.objects.all()
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, *args, **kwargs):
+        reason = request.data.get('reason', '')
+        withdrawal = self.get_object()
+        withdrawal.status = 'rejected'
+        withdrawal.notes = reason
+        withdrawal.save()
+        return Response({'status': 'rejected', 'reason': reason})
 
 
 # -------- TRANSACTIONS MONITORING --------
