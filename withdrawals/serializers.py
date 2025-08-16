@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import WithdrawalRequest
 
+
 class WithdrawalRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = WithdrawalRequest
@@ -13,3 +14,10 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
         if not value.isdigit():
             raise serializers.ValidationError("Account number must contain only digits.")
         return value
+
+
+class WithdrawalDenySerializer(serializers.Serializer):
+    """
+    Serializer for admin denying a withdrawal request.
+    """
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=500)
