@@ -30,3 +30,4 @@ KYC_STATUS_CHOICES = [
     (KYC_APPROVED, 'Approved'),
     (KYC_REJECTED, 'Rejected'),
 ]
+
