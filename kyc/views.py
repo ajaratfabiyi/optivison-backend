@@ -1,52 +1,70 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError
-from django.utils import timezone
 from .models import KYCSubmission
-from .serializers import KYCSubmissionSerializer, KYCStatusSerializer
+from .serializers import KYCSubmissionSerializer, AdminKYCActionSerializer
 
 
+# ---------------------------
+# User submits KYC
+# ---------------------------
 class SubmitKYCView(generics.CreateAPIView):
+    """
+    Allows an authenticated user to submit their KYC documents.
+    """
     serializer_class = KYCSubmissionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        """
-        Prevent re-submission if KYC is already approved.
-        """
-        existing_kyc = getattr(self.request.user, 'kyc_submission', None)
-        if existing_kyc and existing_kyc.status == 'approved':
-            raise ValidationError("Your KYC is already approved and cannot be changed.")
-        serializer.save()
+        serializer.save(user=self.request.user, status='pending')
 
 
+# ---------------------------
+# User checks KYC status
+# ---------------------------
 class KYCStatusView(generics.RetrieveAPIView):
-    serializer_class = KYCStatusSerializer
+    serializer_class = KYCSubmissionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
         return KYCSubmission.objects.get(user=self.request.user)
 
 
+# ---------------------------
+# Admin updates KYC (approve/reject)
+# ---------------------------
 class AdminKYCUpdateView(generics.UpdateAPIView):
-    queryset = KYCSubmission.objects.all()
-    serializer_class = KYCStatusSerializer
+    """
+    Allows admin to approve or reject a KYC submission.
+    """
+    serializer_class = AdminKYCActionSerializer
     permission_classes = [permissions.IsAdminUser]
+    queryset = KYCSubmission.objects.all()
 
     def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        new_status = request.data.get('status')
+        submission = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        if new_status not in dict(KYCSubmission.STATUS_CHOICES):
-            return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
+        action = serializer.validated_data['action']
+        reason = serializer.validated_data.get('reason', '')
 
-        instance.status = new_status
-        instance.reviewed_at = timezone.now()
-        instance.save()
+        if action == 'approve':
+            submission.approve()
+            return Response(
+                {"message": "KYC approved successfully", "status": submission.status},
+                status=status.HTTP_200_OK
+            )
 
-        # Mark user as verified if approved
-        if new_status == 'approved':
-            instance.user.is_kyc_verified = True
-            instance.user.save()
+        elif action == 'reject':
+            if not reason:
+                return Response(
+                    {"error": "Reason is required for rejection"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            submission.reject(reason)
+            return Response(
+                {"message": "KYC rejected", "status": submission.status, "reason": reason},
+                status=status.HTTP_200_OK
+            )
 
-        return Response({"status": instance.status})
+        return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
